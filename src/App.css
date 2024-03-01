@@ -1,0 +1,97 @@
+.App {
+  text-align: center;
+  background-color: #d5d5f5;
+  color: white;
+  font-family: 'Arial', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.top-menu {
+  background-color: #000066;
+  padding: 10px 0;
+}
+
+.menu-button {
+  background: #333399;
+  border: 2px outset #333399;
+  color: white;
+  padding: 10px 20px;
+  margin: 0 5px;
+  cursor: pointer;
+}
+
+.menu-button:hover {
+  background: #4444cc;
+  border-color: #4444cc;
+}
+
+.logo-box, .wallet-connect-box, .content-box {
+  margin: 20px;
+  padding: 20px;
+  border: 3px outset #333399;
+  background-color: #000066;
+  display: inline-block;
+  width: 80%;
+  box-sizing: border-box;
+}
+
+.logo-box img {
+  width: 50px; /* Adjust width as needed */
+  height: 50px; /* Adjust height as needed */
+}
+
+.connect-button, .mint-button, .create-team-button {
+  background: #333399;
+  border: 2px outset #333399;
+  color: white;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.connect-button:hover {
+  background: #4444cc;
+  border-color: #4444cc;
+}
+
+.nft-image {
+  width: 100px;
+  height: auto;
+  margin: 20px;
+  margin-left:20px;
+  margin-right:20px;
+}
+
+.content-box {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center; /* Center the items horizontally */
+  align-items: center; /* Keeps items centered in the box */
+  gap: 20px; /* Adjusts the space between items */
+}
+
+.nft-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center; /* Adjust based on your design */
+  gap: 20px; /* Space between items */
+}
+
+.mint-button-container {
+  margin-bottom: 20px; /* Adds some space between the button and the image container */
+}
+
+
+.lone-squad-title {
+  text-align: center;
+  font-size: 24px; /* Example size, adjust as needed */
+  font-weight: bold; /* Makes the text bold */
+  color: #ffffff; /* Example color, adjust as needed */
+  margin-bottom: 20px; /* Adds some space between the title and the content below */
+}
+
+.error-message {
+  color: red;
+}
