@@ -13,6 +13,8 @@ function App() {
   const [loneSquadData, setLoneSquadData] = useState([]);
   const [cloneSquadData, setCloneSquadData] = useState([]);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
+  const [showLoneSquadApprove, setShowLoneSquadApprove] = useState(false);
+  const [showCloneSquadApprove, setShowCloneSquadApprove] = useState(false);
   const [showCreateButton, setShowCreateButton] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -64,13 +66,26 @@ function App() {
     return selectedNfts;
   };
 
-  const checkLockApproved = async(tokenId, nftAddress, operatorAddress) => {
+  const checkLockApprovedForAll = async(nftAddress, operatorAddress) => {
+    const erc5058 = new web3.eth.Contract(nftABI, nftAddress);
+    try {
+      const isApproved = await erc5058.methods.isLockApprovedForAll(accounts[0], operatorAddress).call();
+      return isApproved;
+    } catch (error) {
+      console.log('error checking lock approval for all');
+    }
+    return false;
+  }
+
+  //Check if the lock is approved for the individual tokenid
+  const checkLockApprovedForId = async(tokenId, nftAddress, operatorAddress) => {
     const erc5058 = new web3.eth.Contract(nftABI, nftAddress);
     try {
       const addressApproved = await erc5058.methods.getLockApproved(tokenId).call();
-      return addressApproved == operatorAddress;
+      console.log('approved address is: ', addressApproved, ' operator address:', operatorAddress);
+      return  addressApproved === operatorAddress;
     } catch (error) {
-      console.log('error checking lock approval: ', error )
+      console.log('error checking lock approval: ', error );
     }
 
     return false;
@@ -98,6 +113,37 @@ function App() {
     }
   }
 
+  //Approve the game to operate a lock on the collection
+  const approveLoneSquadHandler = async() => {
+    if (web3 && accounts.length) {
+      const contract = new web3.eth.Contract(nftABI, loneSquadAddress);
+      try{
+        await contract.methods.setLockApprovalForAll(gameAddress, true).send({from: accounts[0]});
+        setShowLoneSquadApprove(false);
+
+        //Clear error text
+        setErrorMessage('');
+      } catch {
+        console.log('error approving lock');
+      }
+    }
+  }
+
+  const approveCloneSquadHandler = async() => {
+    if (web3 && accounts.length) {
+      const contract = new web3.eth.Contract(nftABI, cloneSquadAddress);
+      try{
+        await contract.methods.setLockApprovalForAll(gameAddress, true).send({from: accounts[0]});
+        setShowCloneSquadApprove(false);
+
+        //Clear error text
+        setErrorMessage('');
+      } catch {
+        console.log('error approving lock');
+      }
+    }
+  }
+
   //User has selected nft's and wants to create a team
   const commitCreateTeamHandler = async() => {
     //Check that 1 lone squad selected
@@ -115,11 +161,18 @@ function App() {
     }
 
     //Check the lock is approved for lone squad collection
-    if (!checkLockApproved(arrLoneSquad[0].id, loneSquadAddress, gameAddress)) {
-      console.log("You must approve the game to access the Lone Squad collection");
-      setErrorMessage('Error: You must approve the game to access the Lone Squad collection');
+    let isApproved = await checkLockApprovedForAll(loneSquadAddress, gameAddress);
+    if (!isApproved) {
+      //Also check if lock is approved for specific id
+      isApproved = await checkLockApprovedForId(arrLoneSquad[0].id, loneSquadAddress, gameAddress);
+      if (!isApproved) {
+        console.log("You must approve the game to access the Lone Squad collection");
+        setErrorMessage('Error: You must approve the game to access the Lone Squad collection');
+        setShowLoneSquadApprove(true);
+      }
       return;
     }
+    setShowLoneSquadApprove(false);
 
     const arrCloneSquad = getSelectedCloneSquad();
     //Check that at least 1 clone squad selected
@@ -136,15 +189,25 @@ function App() {
       return;
     }
 
+    //Check lock for clone squad collection
+    isApproved = await checkLockApprovedForAll(cloneSquadAddress, gameAddress);
+
     //Check the lock is approved for lone squad collection
-    for (let i = 0; i < arrCloneSquad.length; i++) {
-      if (!checkLockApproved(arrCloneSquad[i].id, cloneSquadAddress, gameAddress)) {
-        console.log("You must approve the game to access the Clone Squad collection");
-        setErrorMessage('Error: You must approve the game to access the Clone Squad collection');
-        return;
+    if (!isApproved) {
+      //Check individual id's if necessary
+      for (let i = 0; i < arrCloneSquad.length; i++) {
+        isApproved = await checkLockApprovedForId(arrCloneSquad[i].id, cloneSquadAddress, gameAddress);
+        if (!isApproved) {
+          console.log("You must approve the game to access the Clone Squad collection");
+          setErrorMessage('Error: You must approve the game to access the Clone Squad collection');
+          setShowCloneSquadApprove(true);
+          return;
+        }
       }
     }
+    setShowCloneSquadApprove(false);
 
+    console.log('commitTeamHandler end');
     setErrorMessage('');
   }
 
@@ -277,6 +340,10 @@ function App() {
         {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
         <div className='content-box-nft'>
           <h2 className="lone-squad-title">Lone Squad</h2>
+          {showLoneSquadApprove && (
+            <button className='mint-button' onClick={approveLoneSquadHandler}>APPROVE</button>
+          )}
+          
           <div className='nft-container'>
         
           {loneSquadData.map((item, index) => (
@@ -295,6 +362,9 @@ function App() {
       </div>
       <div className='content-box-nft'>
       <h2 className="lone-squad-title">Clone Squad</h2>
+      {showCloneSquadApprove && (
+        <button className='mint-button' onClick={approveCloneSquadHandler}>APPROVE</button>
+      )}
         <div className='nft-container'>
             {cloneSquadData.map((item, index) => (
               <div key={index}>
