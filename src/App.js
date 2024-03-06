@@ -8,6 +8,7 @@ import gameABI from './game_abi.json'
 function App() {
   const [web3, setWeb3] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [userTeams, setUserTeams] = useState([]);
   const [uri, setNftUri] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [loneSquadData, setLoneSquadData] = useState([]);
@@ -144,6 +145,23 @@ function App() {
     }
   }
 
+  const fetchUserTeams = async(address) => {
+    if (web3 && accounts.length) {
+      const game = new web3.eth.Contract(gameABI, gameAddress);
+
+      try {
+        const arrTeams = await game.methods.getUserTeams(address).call();
+        console.log('user teams: ', arrTeams);
+      } catch (error) {
+        console.log('error fetching user teams: ', error);
+      }
+    }
+  }
+
+  const myTeamsHandler = async() => {
+    await fetchUserTeams(accounts[0]);
+  }
+
   //User has selected nft's and wants to create a team
   const commitCreateTeamHandler = async() => {
     //Check that 1 lone squad selected
@@ -189,6 +207,9 @@ function App() {
       return;
     }
 
+    //Add lone squad to team
+    let arrTeam = [[loneSquadAddress, arrLoneSquad[0].id]]
+
     //Check lock for clone squad collection
     isApproved = await checkLockApprovedForAll(cloneSquadAddress, gameAddress);
 
@@ -203,9 +224,21 @@ function App() {
           setShowCloneSquadApprove(true);
           return;
         }
+
+        //Add to team
+        arrTeam.push([cloneSquadAddress, arrCloneSquad[i].id]);
       }
     }
     setShowCloneSquadApprove(false);
+
+    //Create team
+    const game = new web3.eth.Contract(gameABI, gameAddress);
+    try {
+      await game.methods.createTeam(arrTeam).send({from: accounts[0]});
+    } catch (error) {
+      console.log('error creating team: ', error);
+      return;
+    }
 
     console.log('commitTeamHandler end');
     setErrorMessage('');
@@ -332,6 +365,7 @@ function App() {
       <div className="content-box">
         <div className='mint-button-container'>
           <button className='mint-button' onClick={mintHandler}>MINT</button>
+          <button className='create-team-button' onClick={myTeamsHandler}>MY TEAMS</button>
           <button className='create-team-button' onClick={createTeamHandler}>CREATE TEAM</button>
           {showCheckboxes && showCreateButton && (
             <button className='create-team-button' onClick={commitCreateTeamHandler}>CREATE</button>
