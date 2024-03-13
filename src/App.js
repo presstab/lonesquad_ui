@@ -2,6 +2,7 @@ import logo from './logo.svg';
 import './App.css';
 import Web3 from 'web3';
 import { useState, useEffect } from 'react';
+import NFT from './models/nft'
 import nftABI from './nftabi.json';
 import gameABI from './game_abi.json'
 
@@ -11,8 +12,8 @@ function App() {
   const [userTeams, setUserTeams] = useState([]);
   const [uri, setNftUri] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [loneSquadData, setLoneSquadData] = useState([]);
-  const [cloneSquadData, setCloneSquadData] = useState([]);
+  const [ownedLoneSquad, setOwnedLoneSquad] = useState(new Map());
+  const [ownedCloneSquad, setOwnedCloneSquad] = useState(new Map());
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [showLoneSquadApprove, setShowLoneSquadApprove] = useState(false);
   const [showCloneSquadApprove, setShowCloneSquadApprove] = useState(false);
@@ -22,7 +23,7 @@ function App() {
 
   const loneSquadAddress = '0xEbd2979d006F70df0Bb013f82141AC530a435484';
   const cloneSquadAddress = '0xc3942bC26A48e5230Cadc2755b65De65b7c8A2fc';
-  const gameAddress = '0x53141385f811cd5451Abe6198A85432F43D4C1E3';
+  const gameAddress = '0x081fBaa848EC3A3F4fB0a2718069E28B04805369';
 
   useEffect(() => {
     if (window.ethereum) {
@@ -57,14 +58,38 @@ function App() {
     })
   }
 
+  const addOwnedLoneSquad = (nfts) => {
+    let nftMap = new Map();
+    nfts.forEach((nft) => 
+      nftMap.set(nft.id, nft)
+    );
+    setOwnedLoneSquad(nftMap);
+  }
+
+  const addOwnedCloneSquad = (nfts) => {
+    let nftMap = new Map();
+    nfts.forEach((nft) => 
+      nftMap.set(nft.id, nft)
+    );
+    setOwnedCloneSquad(nftMap);
+  }
+
   const getSelectedLoneSquad = () => {
-    const selectedNfts = loneSquadData.filter(nft => nft.selected);
-    return selectedNfts;
+    let ret = [];
+    ownedLoneSquad.forEach(nft => {
+      if (nft.selected)
+        ret.push(nft);
+    });
+    return ret;
   };
   
   const getSelectedCloneSquad = () => {
-    const selectedNfts = cloneSquadData.filter(nft => nft.selected);
-    return selectedNfts;
+    let ret = [];
+    ownedCloneSquad.forEach(nft => {
+      if (nft.selected)
+        ret.push(nft);
+    });
+    return ret;
   };
 
   const checkLockApprovedForAll = async(nftAddress, operatorAddress) => {
@@ -151,6 +176,7 @@ function App() {
 
       try {
         const arrTeams = await game.methods.getUserTeams(address).call();
+        setUserTeams(arrTeams);
         console.log('user teams: ', arrTeams);
       } catch (error) {
         console.log('error fetching user teams: ', error);
@@ -159,7 +185,24 @@ function App() {
   }
 
   const myTeamsHandler = async() => {
+    //Get teams for user
     await fetchUserTeams(accounts[0]);
+    const arrTeams = userTeams;
+    if (userTeams < 1) {
+      console.log('less than 1');
+      return;
+    }
+
+    //Get nft's on that team
+    const game = new web3.eth.Contract(gameABI, gameAddress);
+    try {
+      const team = await game.methods.getTeam(arrTeams[0]).call();
+      console.log('team: ', team);
+    } catch (error) {
+      console.log('error fetching team map: ', error);
+      return;
+    }
+
   }
 
   //User has selected nft's and wants to create a team
@@ -249,65 +292,74 @@ function App() {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
+  // Utility function to check if any NFT is selected and update the state accordingly
+const checkForSelection = (map) => {
+  return Array.from(map.values()).some(nft => nft.isSelected);
+};
+
   const toggleLoneSquadSelect = (index) => {
-    setLoneSquadData(loneSquadData => (
-      loneSquadData.map((item, idx) => (
-        index === idx ? { ...item, selected: !item.selected } : item
-      ))
-    ));
-    // After updating the selection, check if any NFT is selected to control the visibility of the "Create" button
-    setShowCreateButton(loneSquadData.some(nft => nft.selected));
+    const updatedMap = new Map(ownedLoneSquad);
+    const nft = updatedMap.get(index);
+    if (nft) {
+      const updatedNft = new NFT(nft.metadata, nft.address, nft.id, !nft.isSelected, nft.teamId);
+      updatedMap.set(nft.id, updatedNft);
+    }
+    setOwnedLoneSquad(updatedMap);
+    setShowCreateButton(checkForSelection(updatedMap));
 
     // Clear the error message when the selection changes
     setErrorMessage('');
   };
 
   const toggleCloneSquadSelect = (index) => {
-    setCloneSquadData(cloneSquadData => (
-      cloneSquadData.map((item, idx) => (
-        index === idx ? { ...item, selected: !item.selected } : item
-      ))
-    ));
-    // After updating the selection, check if any NFT is selected to control the visibility of the "Create" button
-    setShowCreateButton(cloneSquadData.some(nft => nft.selected));
+    const updatedMap = new Map(ownedCloneSquad);
+    const nft = updatedMap.get(index);
+    if (nft) {
+      const updatedNft = new NFT(nft.metadata, nft.address, nft.id, !nft.isSelected, nft.teamId);
+      updatedMap.set(nft.id, updatedNft);
+    } else {
+      console.log("toggleSelect map does not contain: ", index)
+    }
+    setOwnedCloneSquad(updatedMap);
+
+    setShowCreateButton(checkForSelection(updatedMap));
 
     // Clear the error message when the selection changes
     setErrorMessage('');
   };
 
-  const getOwnedIds = async (nftContract, userAddress) => {
-    let myIds = [];
+  const getOwnedNfts = async (nftContract, userAddress) => {
+    let myNfts = [];
     let owned = 0;
     while (true) {
       try {
         console.log('check nfts for: ' + userAddress + ':' + owned);
         const id = await nftContract.methods.tokenOfOwnerByIndex(userAddress, owned).call();
         console.log('address owns id: ' + id);
-        myIds.push(id);
+        const nft = new NFT([], nftContract.address, id);
+        myNfts.push(nft);
         owned++;
       } catch {
         break;
       }
     }
 
-    return myIds;
+    return myNfts;
   }
 
-  const getMetaData = async (uri, ids, name) => {
-    let data = [];
-    for (const id of ids) {
+  const getMetaData = async (uri, nfts, name) => {
+    for (const nft of nfts) {
       try {
         // Fetch the metadata from the URI
-        const response = await fetch(uri + id);
+        const response = await fetch(uri + nft.id);
         const metadata = await response.json();
         console.log(metadata);
-        data.push({nft: name, id: id, url: metadata.image, selected: false});
+        nft.metadata = metadata;
+        //data.push({nft: name, id: id, url: metadata.image, selected: false});
       } catch {
-        console.log('failed to get image: ' + id);
+        console.log('failed to get image: ' + nft.id);
       }
     }
-
-    return data;
   }
 
   const fetchNftData = async () => {
@@ -321,9 +373,9 @@ function App() {
         setNftUri(uri);
 
         //get owned nfts
-        let myIds = await getOwnedIds(loneSquad, myAddress);
-        let data = await getMetaData(uri, myIds, 'ls');
-        setLoneSquadData(data);
+        let nfts = await getOwnedNfts(loneSquad, myAddress);
+        await getMetaData(uri, nfts, 'ls');
+        addOwnedLoneSquad(nfts);
       } catch {
         console.error('Error fetching NFT data:');
       }
@@ -335,9 +387,9 @@ function App() {
         console.log(uri);
 
         //Get owned clone squad nfts
-        let myIds = await getOwnedIds(cloneSquad, myAddress);
-        let data = await getMetaData(uri, myIds, 'cs');
-        setCloneSquadData(data);
+        let nfts = await getOwnedNfts(cloneSquad, myAddress);
+        await getMetaData(uri, nfts, 'cs');
+        addOwnedCloneSquad(nfts);
       } catch {
         console.error('Error fetching clone squad data:');
       }
@@ -380,18 +432,18 @@ function App() {
           
           <div className='nft-container'>
         
-          {loneSquadData.map((item, index) => (
+          {Array.from(ownedLoneSquad.values()).map((nft, index) => (
             <div key={index}>
               {showCheckboxes && (
                 <input
                   type="checkbox"
-                  checked={item.selected}
-                  onChange={() => toggleLoneSquadSelect(index)}
+                  checked={nft.isSelected}
+                  onChange={() => toggleLoneSquadSelect(nft.id)}
                 />
               )}
-              <img src={item.url} alt={`NFT ${index}`} className='nft-image' />
+              <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
             </div>
-          ))}
+              ))}
         </div>
       </div>
       <div className='content-box-nft'>
@@ -400,16 +452,16 @@ function App() {
         <button className='mint-button' onClick={approveCloneSquadHandler}>APPROVE</button>
       )}
         <div className='nft-container'>
-            {cloneSquadData.map((item, index) => (
+            {Array.from(ownedCloneSquad.values()).map((nft, index) => (
               <div key={index}>
                 {showCheckboxes && (
                   <input
                     type="checkbox"
-                    checked={item.selected}
-                    onChange={() => toggleCloneSquadSelect(index)}
+                    checked={nft.isSelected}
+                    onChange={() => toggleCloneSquadSelect(nft.id)}
                   />
                 )}
-                <img src={item.url} alt={`NFT ${index}`} className='nft-image' />
+                <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
               </div>
             ))
 
