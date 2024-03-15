@@ -17,6 +17,7 @@ function App() {
   const [userTeams, setUserTeams] = useState([]);
   const [uri, setNftUri] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [needTeamUpdate, setNeedTeamUpdate] = useState(false);
   const [ownedLoneSquad, setOwnedLoneSquad] = useState(new Map());
   const [ownedCloneSquad, setOwnedCloneSquad] = useState(new Map());
   const [showCheckboxes, setShowCheckboxes] = useState(false);
@@ -49,6 +50,17 @@ function App() {
     }
   }, [])
 
+  //Wallet connect listener
+  useEffect(() => {
+    console.log('Wallet connected');
+    fetchNftData();
+  }, [isConnected])
+
+  //Listen for team update needed
+  useEffect(() => {
+    console.log('nft list fetched');
+    fetchTeamInfo(accounts[0]);
+  }, [needTeamUpdate])
 
 
   const connectWalletHandler = () => {
@@ -56,7 +68,6 @@ function App() {
     .then(accounts => {
       setAccounts(accounts);
       setIsConnected(true);
-      fetchNftData(0);
     })
     .catch(err => {
       console.error('Error connecting to MetaMask:', err);
@@ -192,9 +203,9 @@ function App() {
     return [];
   }
 
-  const myTeamsHandler = async() => {
+  const fetchTeamInfo = async(address) => {
     //Get teams for user
-    const arrTeams = await fetchUserTeams(accounts[0]);
+    const arrTeams = await fetchUserTeams(address);
     if (arrTeams.length < 1) {
       console.log('less than 1');
       return;
@@ -208,31 +219,35 @@ function App() {
       console.log('team: ', team);
 
       //Associate nft's with their team
+      const newOwnedLoneSquad = new Map(ownedLoneSquad);
+      const newOwnedCloneSquad = new Map(ownedCloneSquad);
       for (let i = 0; i < team.length; i++) {
         const nftAddress = team[i].addr;
         const nftId = team[i].id;
-        const ownedMap = (nftAddress === loneSquadAddress ? ownedLoneSquad : ownedCloneSquad);
+        const ownedMap = (nftAddress === loneSquadAddress ? newOwnedLoneSquad : newOwnedCloneSquad);
 
         const nft = ownedMap.get(nftId);
         if (!nft) {
-          console.log("failed to find nft in ownedlonesquad: ", nftId);
+          console.error("failed to find nft in ownedlonesquad: ", nftId);
+          return;
         }
 
         nft.teamId = teamId;
         console.log('setting id to: ', nft.teamId);
         ownedMap.set(nft.id, cloneNft(nft));
-        if (nftAddress === loneSquadAddress) {
-          setOwnedLoneSquad(ownedMap);
-        } else if (nftAddress === cloneSquadAddress) {
-          setOwnedCloneSquad(ownedMap);
-        } else {
-          console.log("err: Unknown nft address: ", nftAddress);
-        }
       }
+
+      setOwnedLoneSquad(newOwnedLoneSquad);
+      setOwnedCloneSquad(newOwnedCloneSquad);
+
     } catch (error) {
-      console.log('error fetching team map: ', error);
+      console.error('error fetching team map: ', error);
       return;
     }
+  }
+
+  const myTeamsHandler = async() => {
+    
   }
 
   //User has selected nft's and wants to create a team
@@ -428,6 +443,8 @@ function App() {
       } catch {
         console.error('Error fetching clone squad data:');
       }
+
+      setNeedTeamUpdate(true);
     }
   }
 
@@ -439,6 +456,7 @@ function App() {
     setTab(TAB.Teams);
   }
 
+  //Assets tab
   const renderAssets = () => {
     return (
       <>
@@ -560,16 +578,13 @@ function App() {
         <button className="menu-button">Home</button>
         <button className="menu-button">Game</button>
         <button className="menu-button">Stats</button>
+        <button className='connect-button' onClick={connectWalletHandler}>
+        {isConnected ? 'Connected ' + getAbbreviatedAddress(accounts[0]) : "Connect Wallet"}
+      </button>
       </nav>
 
       <div className="logo-box">
         <img src={logo} alt='logo'/>
-      </div>
-
-      <div className="wallet-connect-box">
-      <button className='connect-button' onClick={connectWalletHandler}>
-        {isConnected ? 'Connected ' + getAbbreviatedAddress(accounts[0]) : "Connect Wallet"}
-      </button>
       </div>
       
       <div className="content-box">
