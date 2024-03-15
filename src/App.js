@@ -6,6 +6,11 @@ import NFT from './models/nft'
 import nftABI from './nftabi.json';
 import gameABI from './game_abi.json'
 
+const TAB = {
+  Assets: 0,
+  Teams: 1
+}
+
 function App() {
   const [web3, setWeb3] = useState(null);
   const [accounts, setAccounts] = useState([]);
@@ -19,7 +24,7 @@ function App() {
   const [showCloneSquadApprove, setShowCloneSquadApprove] = useState(false);
   const [showCreateButton, setShowCreateButton] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-
+  const [tab, setTab] = useState(TAB.Assets);
 
   const loneSquadAddress = '0xEbd2979d006F70df0Bb013f82141AC530a435484';
   const cloneSquadAddress = '0xc3942bC26A48e5230Cadc2755b65De65b7c8A2fc';
@@ -175,20 +180,22 @@ function App() {
       const game = new web3.eth.Contract(gameABI, gameAddress);
 
       try {
-        const arrTeams = await game.methods.getUserTeams(address).call();
+        const ret = await game.methods.getUserTeams(address).call();
+        const arrTeams = Array.isArray(ret) ? ret : [ret];
         setUserTeams(arrTeams);
         console.log('user teams: ', arrTeams);
+        return arrTeams;
       } catch (error) {
         console.log('error fetching user teams: ', error);
       }
     }
+    return [];
   }
 
   const myTeamsHandler = async() => {
     //Get teams for user
-    await fetchUserTeams(accounts[0]);
-    const arrTeams = userTeams;
-    if (userTeams < 1) {
+    const arrTeams = await fetchUserTeams(accounts[0]);
+    if (arrTeams.length < 1) {
       console.log('less than 1');
       return;
     }
@@ -196,13 +203,36 @@ function App() {
     //Get nft's on that team
     const game = new web3.eth.Contract(gameABI, gameAddress);
     try {
-      const team = await game.methods.getTeam(arrTeams[0]).call();
+      const teamId = arrTeams[0];
+      const team = await game.methods.getTeam(teamId).call();
       console.log('team: ', team);
+
+      //Associate nft's with their team
+      for (let i = 0; i < team.length; i++) {
+        const nftAddress = team[i].addr;
+        const nftId = team[i].id;
+        const ownedMap = (nftAddress === loneSquadAddress ? ownedLoneSquad : ownedCloneSquad);
+
+        const nft = ownedMap.get(nftId);
+        if (!nft) {
+          console.log("failed to find nft in ownedlonesquad: ", nftId);
+        }
+
+        nft.teamId = teamId;
+        console.log('setting id to: ', nft.teamId);
+        ownedMap.set(nft.id, cloneNft(nft));
+        if (nftAddress === loneSquadAddress) {
+          setOwnedLoneSquad(ownedMap);
+        } else if (nftAddress === cloneSquadAddress) {
+          setOwnedCloneSquad(ownedMap);
+        } else {
+          console.log("err: Unknown nft address: ", nftAddress);
+        }
+      }
     } catch (error) {
       console.log('error fetching team map: ', error);
       return;
     }
-
   }
 
   //User has selected nft's and wants to create a team
@@ -292,17 +322,22 @@ function App() {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
+  // Utility function to copy construct new nft
+  const cloneNft = (nft) => {
+    return new NFT(nft.metadata, nft.address, nft.id, nft.isSelected, nft.teamId, nft.isLocked);
+  }
+
   // Utility function to check if any NFT is selected and update the state accordingly
-const checkForSelection = (map) => {
-  return Array.from(map.values()).some(nft => nft.isSelected);
-};
+  const checkForSelection = (map) => {
+    return Array.from(map.values()).some(nft => nft.isSelected);
+  };
 
   const toggleLoneSquadSelect = (index) => {
     const updatedMap = new Map(ownedLoneSquad);
     const nft = updatedMap.get(index);
     if (nft) {
-      const updatedNft = new NFT(nft.metadata, nft.address, nft.id, !nft.isSelected, nft.teamId);
-      updatedMap.set(nft.id, updatedNft);
+      nft.isSelected = !nft.isSelected;
+      updatedMap.set(nft.id, cloneNft(nft));
     }
     setOwnedLoneSquad(updatedMap);
     setShowCreateButton(checkForSelection(updatedMap));
@@ -315,8 +350,8 @@ const checkForSelection = (map) => {
     const updatedMap = new Map(ownedCloneSquad);
     const nft = updatedMap.get(index);
     if (nft) {
-      const updatedNft = new NFT(nft.metadata, nft.address, nft.id, !nft.isSelected, nft.teamId);
-      updatedMap.set(nft.id, updatedNft);
+      nft.isSelected = !nft.isSelected;
+      updatedMap.set(nft.id, cloneNft(nft));
     } else {
       console.log("toggleSelect map does not contain: ", index)
     }
@@ -396,6 +431,129 @@ const checkForSelection = (map) => {
     }
   }
 
+  const showAssetsHandler = () => {
+    setTab(TAB.Assets);
+  }
+
+  const showTeamsHandler = () => {
+    setTab(TAB.Teams);
+  }
+
+  const renderAssets = () => {
+    return (
+      <>
+      <h2 className="lone-squad-title">Lone Squad</h2>
+          {showLoneSquadApprove && (
+            <button className='mint-button' onClick={approveLoneSquadHandler}>APPROVE</button>
+          )}
+        <button className='mint-button' onClick={mintHandler}>MINT</button>
+        {/* Lone Squad NFTs */}
+        <div className='nft-container'>
+          {Array.from(ownedLoneSquad.values()).map((nft, index) => (
+            <div key={index}>
+              {showCheckboxes && (
+                <input
+                  type="checkbox"
+                  checked={nft.isSelected}
+                  onChange={() => toggleLoneSquadSelect(nft.id)}
+                />
+              )}
+              <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
+              {nft.teamId !== "" && (<p>Team Id: {String(nft.teamId).substring(0, 4)}</p>)}
+            </div>
+          ))}
+        </div>
+        {/* Clone Squad NFTs */}
+        <h2 className="lone-squad-title">Clone Squad</h2>
+        {showCloneSquadApprove && (
+          <button className='mint-button' onClick={approveCloneSquadHandler}>APPROVE</button>
+        )}
+        <div className='nft-container'>
+          {Array.from(ownedCloneSquad.values()).map((nft, index) => (
+            <div key={index}>
+              {showCheckboxes && (
+                <input
+                  type="checkbox"
+                  checked={nft.isSelected}
+                  onChange={() => toggleCloneSquadSelect(nft.id)}
+                />
+              )}
+              <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
+              {nft.teamId !== "" && (<p>Team Id: {String(nft.teamId).substring(0, 4)}</p>)}
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  };
+
+  //Returns array of NFT objects
+  const getTeamMembers = (teamId) => {
+    //Get Lone Squad Member
+    let arrMembers = [];
+    const arrLoneSquad = Array.from(ownedLoneSquad.values());
+    console.log('ownedLoneSquad size ', arrLoneSquad.length);
+    for (let i = 0; i < arrLoneSquad.length; i++) {
+      if (arrLoneSquad[i].teamId != "") {
+        arrMembers.push(arrLoneSquad[i]);
+        break;
+      }
+    }
+    if (!arrMembers.length) {
+      console.log('error: no lone squad team member found for team ', teamId);
+    }
+
+    //Get clone squad members
+    const arrCloneSquad = Array.from(ownedCloneSquad.values());
+    for (let i = 0; i < arrCloneSquad.length; i++) {
+      if (arrCloneSquad[i].teamId === teamId)
+        arrMembers.push(arrCloneSquad[i]);
+    }
+
+    return arrMembers;
+  }
+  
+  const renderTeam = (teamId) => {
+    console.log(teamId);
+    const members = getTeamMembers(teamId);
+    return (
+      <>
+      {'Team: ' + String(teamId).substring(0,4)}
+      <div className='nft-container'>
+        {members.map((nft, index) => (
+          <div key={index}>
+          <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
+          {nft.teamId !== "" && (<p>Team Id: {String(nft.teamId).substring(0, 4)}</p>)}
+          </div>
+        
+        ))}
+      </div>
+    
+    
+      </>);
+  }
+
+  const renderTeams = () => {
+    // You can extend this to include team-specific content
+    return (
+      <>
+      {console.log("render teams")}
+        <button className='create-team-button' onClick={myTeamsHandler}>MY TEAMS</button>
+        <button className='create-team-button' onClick={createTeamHandler}>CREATE TEAM</button>
+
+        <div className='nft-container'>
+          {userTeams.length && userTeams.map((team) => (
+
+            <div key={team}>
+              {renderTeam(team)}
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  };
+  
+
   return (
     <div className="App">
       <nav className="top-menu">
@@ -413,66 +571,21 @@ const checkForSelection = (map) => {
         {isConnected ? 'Connected ' + getAbbreviatedAddress(accounts[0]) : "Connect Wallet"}
       </button>
       </div>
-
+      
       <div className="content-box">
-        <div className='mint-button-container'>
-          <button className='mint-button' onClick={mintHandler}>MINT</button>
-          <button className='create-team-button' onClick={myTeamsHandler}>MY TEAMS</button>
-          <button className='create-team-button' onClick={createTeamHandler}>CREATE TEAM</button>
-          {showCheckboxes && showCreateButton && (
-            <button className='create-team-button' onClick={commitCreateTeamHandler}>CREATE</button>
-          )}
+        <div className='tab-button-container'>
+          <button className={`tab-button ${tab === TAB.Assets ? 'tab-button-active' : ''}`} onClick={showAssetsHandler}>ASSETS</button>
+          <button className={`tab-button ${tab === TAB.Teams ? 'tab-button-active' : ''}`} onClick={showTeamsHandler}>TEAMS</button>
         </div>
+  
         {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
         <div className='content-box-nft'>
-          <h2 className="lone-squad-title">Lone Squad</h2>
-          {showLoneSquadApprove && (
-            <button className='mint-button' onClick={approveLoneSquadHandler}>APPROVE</button>
-          )}
-          
-          <div className='nft-container'>
-        
-          {Array.from(ownedLoneSquad.values()).map((nft, index) => (
-            <div key={index}>
-              {showCheckboxes && (
-                <input
-                  type="checkbox"
-                  checked={nft.isSelected}
-                  onChange={() => toggleLoneSquadSelect(nft.id)}
-                />
-              )}
-              <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
-            </div>
-              ))}
+          {tab === TAB.Assets && renderAssets()}
+          {tab === TAB.Teams && renderTeams()}
         </div>
-      </div>
-      <div className='content-box-nft'>
-      <h2 className="lone-squad-title">Clone Squad</h2>
-      {showCloneSquadApprove && (
-        <button className='mint-button' onClick={approveCloneSquadHandler}>APPROVE</button>
-      )}
-        <div className='nft-container'>
-            {Array.from(ownedCloneSquad.values()).map((nft, index) => (
-              <div key={index}>
-                {showCheckboxes && (
-                  <input
-                    type="checkbox"
-                    checked={nft.isSelected}
-                    onChange={() => toggleCloneSquadSelect(nft.id)}
-                  />
-                )}
-                <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
-              </div>
-            ))
-
-            }
-        </div>
-      </div>
-        
-        
       </div>
     </div>
-  );
+  ); 
 }
 
 export default App;

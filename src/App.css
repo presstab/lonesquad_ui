@@ -42,12 +42,17 @@
   height: 50px; /* Adjust height as needed */
 }
 
-.connect-button, .mint-button, .create-team-button {
+.connect-button, .mint-button, .create-team-button, .tab-button {
   background: #333399;
   border: 2px outset #333399;
   color: white;
   padding: 10px 20px;
   cursor: pointer;
+}
+
+.tab-button-active {
+  background: #222277; /* Darker background for active state */
+  border-color: #222277; /* Matching border color */
 }
 
 .connect-button:hover {
@@ -79,7 +84,7 @@
   gap: 20px; /* Space between items */
 }
 
-.mint-button-container {
+.mint-button-container, .tab-button {
   margin-bottom: 20px; /* Adds some space between the button and the image container */
 }
 
