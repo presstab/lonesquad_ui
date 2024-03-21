@@ -204,10 +204,45 @@ function App() {
   }
 
   const fetchTeamInfo = async(address) => {
+    setNeedTeamUpdate(false);
+
     //Get teams for user
     const arrTeams = await fetchUserTeams(address);
     if (arrTeams.length < 1) {
+      //update to clear out teams from nft's
       console.log('less than 1');
+      
+      //Associate nft's with their team
+      const newOwnedLoneSquad = new Map();
+      const newOwnedCloneSquad = new Map();
+
+      //Clear team id's for Lone Squad
+      ownedLoneSquad.forEach((value, key) => {
+        const nft = ownedLoneSquad.get(value.id);
+        if (!nft) {
+          console.error("failed to find nft in ownedlonesquad: ", value.id);
+          return;
+        }
+
+        nft.teamId = "";
+        newOwnedLoneSquad.set(nft.id, cloneNft(nft));
+      });
+
+      //Clear team id's for Clone Squad
+      ownedCloneSquad.forEach((value, key) => {
+        const nft = ownedCloneSquad.get(value.id);
+        if (!nft) {
+          console.error("failed to find nft in ownedclonesquad: ", value.id);
+          return;
+        }
+
+        nft.teamId = "";
+        newOwnedCloneSquad.set(nft.id, cloneNft(nft));
+      });
+
+      setOwnedLoneSquad(newOwnedLoneSquad);
+      setOwnedCloneSquad(newOwnedCloneSquad);
+      
       return;
     }
 
@@ -456,6 +491,24 @@ function App() {
     setTab(TAB.Teams);
   }
 
+  const disbandTeamHandler = async (teamId) => {
+    console.log('disband team ', teamId);
+    if (web3 && accounts.length) {
+      const game = new web3.eth.Contract(gameABI, gameAddress);
+
+      try {
+        await game.methods.disbandTeam(teamId).send({from: accounts[0]});
+        setNeedTeamUpdate(true);
+      } catch (error) {
+        console.log('error disbanding team: ', teamId);
+      }
+    }
+  }
+
+  const battleTeamHandler = (teamId) => {
+    //todo
+  }
+
   //Assets tab
   const renderAssets = () => {
     return (
@@ -518,7 +571,7 @@ function App() {
       }
     }
     if (!arrMembers.length) {
-      console.log('error: no lone squad team member found for team ', teamId);
+      console.error('error: no lone squad team member found for team ', teamId);
     }
 
     //Get clone squad members
@@ -536,15 +589,19 @@ function App() {
     const members = getTeamMembers(teamId);
     return (
       <>
-      {'Team: ' + String(teamId).substring(0,4)}
-      <div className='nft-container'>
-        {members.map((nft, index) => (
-          <div key={index}>
-          <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
-          {nft.teamId !== "" && (<p>Team Id: {String(nft.teamId).substring(0, 4)}</p>)}
-          </div>
-        
-        ))}
+      <div className='team-container'>
+        {'Team: ' + String(teamId).substring(0,4)}
+        <div className="team-button-container">
+          <button className='disband-button' onClick={() => disbandTeamHandler(teamId)}>DISBAND</button>
+          <button className='battle-button' onClick={() => battleTeamHandler(teamId)}>BATTLE</button>
+        </div>
+        <div className='nft-container'>
+          {members.map((nft, index) => (
+            <div key={index}>
+            <img src={nft.metadata.image} alt={`NFT ${nft.id}`} className='nft-image' />
+            </div>
+          ))}
+        </div>
       </div>
     
     

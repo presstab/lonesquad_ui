@@ -84,9 +84,26 @@
   gap: 20px; /* Space between items */
 }
 
-.mint-button-container, .tab-button {
+.team-container {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center; /* Adjust based on your design */
+  gap: 20px; /* Space between items */
+  border: 3px outset #000000;
+  background-color: #a1a1a1;
+}
+
+.team-button-container, .tab-button {
+  margin-bottom: 20px; /* Adds some space between the button and the image container */
+  justify-content: left;
+  flex-direction: column;
+}
+
+.button-container, .tab-button {
   margin-bottom: 20px; /* Adds some space between the button and the image container */
 }
+
 
 
 .lone-squad-title {
